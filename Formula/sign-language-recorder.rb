@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.7/sign-language-recorder-0.1.7.tar.gz"
-  sha256 "b0191dccabba7dd26b36d5e986f882d3af2efdff960cbe215c19167cb4444115"
-  version "0.1.7"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.8/sign-language-recorder-0.1.8.tar.gz"
+  sha256 "71a17cb4f3664c55c1a92172045fdfc8f265c5749c2c55cb27da3479b899364c"
+  version "0.1.8"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -75,7 +75,9 @@ class SignLanguageRecorder < Formula
       ohai "Reusing existing venv at #{venv_dir}"
     end
 
-    # Create CLI launcher
+    # Create CLI launcher with auto-setup for Launchpad .app bundle
+    # Homebrew sandbox blocks writes to /Applications in both install and post_install,
+    # so the launcher creates the .app bundle on first run (runs as user, no sandbox).
     (bin/"sign-language-recorder").write <<~EOS
       #!/bin/bash
       export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
@@ -83,42 +85,28 @@ class SignLanguageRecorder < Formula
 
       INSTALL_DIR="#{prefix}"
       VENV_PYTHON="#{var}/sign-language-recorder/.venv/bin/python"
+      APP_BUNDLE="/Applications/Sign Language Recorder.app"
+      APP_VERSION="#{version}"
 
-      if [[ "$1" == "--update" ]]; then
-          brew upgrade sign-language-recorder 2>/dev/null || brew upgrade spinsoft-transcription/apps/sign-language-recorder
-          exit $?
-      fi
+      setup_app_bundle() {
+          # Check if .app already exists with current version
+          if [[ -d "$APP_BUNDLE" ]]; then
+              local existing_ver
+              existing_ver=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null)
+              [[ "$existing_ver" == "$APP_VERSION" ]] && return 0
+              rm -rf "$APP_BUNDLE"
+          fi
 
-      # App must run from app/ directory (all relative paths assume this)
-      cd "$INSTALL_DIR/app" || exit 1
-      exec "$VENV_PYTHON" app.py "$@"
-    EOS
+          echo "Setting up Launchpad icon..."
+          mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 
-    # Create .app bundle during install (post_install runs sandboxed and can't write to /Applications)
-    create_app_bundle
-  end
+          # Copy icon
+          if [[ -f "$INSTALL_DIR/app/assets/app.icns" ]]; then
+              cp "$INSTALL_DIR/app/assets/app.icns" "$APP_BUNDLE/Contents/Resources/app.icns"
+          fi
 
-  def post_install
-    create_default_settings
-  end
-
-  def create_app_bundle
-    app_bundle = Pathname.new("/Applications/Sign Language Recorder.app")
-
-    # Always recreate to pick up new icon/version on upgrade
-    rm_rf app_bundle if app_bundle.exist?
-
-    (app_bundle/"Contents/MacOS").mkpath
-    (app_bundle/"Contents/Resources").mkpath
-
-    # Copy icon if generated
-    icon_src = prefix/"app/assets/app.icns"
-    if icon_src.exist?
-      cp icon_src, app_bundle/"Contents/Resources/app.icns"
-    end
-
-    # Info.plist
-    (app_bundle/"Contents/Info.plist").write <<~XML
+          # Info.plist
+          cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
       <?xml version="1.0" encoding="UTF-8"?>
       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
        "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -133,9 +121,9 @@ class SignLanguageRecorder < Formula
           <key>CFBundleDisplayName</key>
           <string>Sign Language Recorder</string>
           <key>CFBundleVersion</key>
-          <string>#{version}</string>
+          <string>__VERSION__</string>
           <key>CFBundleShortVersionString</key>
-          <string>#{version}</string>
+          <string>__VERSION__</string>
           <key>CFBundleIconFile</key>
           <string>app</string>
           <key>CFBundlePackageType</key>
@@ -150,17 +138,44 @@ class SignLanguageRecorder < Formula
           <true/>
       </dict>
       </plist>
-    XML
+      PLIST
+          sed -i '' "s/__VERSION__/$APP_VERSION/g" "$APP_BUNDLE/Contents/Info.plist"
 
-    # Launcher script
-    (app_bundle/"Contents/MacOS/launcher").write <<~EOS
+          # Launcher script
+          cat > "$APP_BUNDLE/Contents/MacOS/launcher" << 'LAUNCHER'
       #!/bin/bash
       export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
       export LANG="en_US.UTF-8"
-      cd "#{prefix}/app" || exit 1
-      exec "#{var}/sign-language-recorder/.venv/bin/python" app.py "$@"
+      SCRIPT_DIR="$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")"
+      # Re-exec through the CLI launcher so paths are always correct
+      exec "#{bin}/sign-language-recorder" "$@"
+      LAUNCHER
+          chmod 755 "$APP_BUNDLE/Contents/MacOS/launcher"
+
+          echo "Launchpad icon installed."
+          killall Dock 2>/dev/null || true
+      }
+
+      if [[ "$1" == "--update" ]]; then
+          brew upgrade sign-language-recorder 2>/dev/null || brew upgrade spinsoft-transcription/apps/sign-language-recorder
+          exit $?
+      fi
+
+      if [[ "$1" == "--setup" ]]; then
+          setup_app_bundle
+          exit $?
+      fi
+
+      # Auto-setup .app bundle on first run (silent)
+      setup_app_bundle 2>/dev/null
+
+      # App must run from app/ directory (all relative paths assume this)
+      cd "$INSTALL_DIR/app" || exit 1
+      exec "$VENV_PYTHON" app.py "$@"
     EOS
-    (app_bundle/"Contents/MacOS/launcher").chmod 0755
+
+    # Create default settings (writes to prefix, allowed in install)
+    create_default_settings
   end
 
   def create_default_settings
@@ -196,14 +211,14 @@ class SignLanguageRecorder < Formula
       Sign Language Recorder has been installed!
 
       Launch from:
-        • Launchpad — search "Sign Language Recorder"
         • Terminal  — sign-language-recorder
+        • Launchpad — icon is auto-created on first launch
+
+      If Launchpad icon doesn't appear, run:
+        sign-language-recorder --setup
 
       Update:
         brew upgrade sign-language-recorder
-
-      The app icon should appear in Launchpad automatically.
-      If not, try: killall Dock
 
       Camera access: macOS will prompt for camera permission on first launch.
     EOS
