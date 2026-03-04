@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.3/sign-language-recorder-0.1.3.tar.gz"
-  sha256 "0ce9912f5f8430b7f3a8130d2d8a6aa026bb3db41262fa60c98278496dc6c07b"
-  version "0.1.3"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.4/sign-language-recorder-0.1.4.tar.gz"
+  sha256 "5c7cd1f6ba3d089d5aa93701ff3f7d4e3b376807ce0288f095a9fe4258a14c98"
+  version "0.1.4"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -49,12 +49,24 @@ class SignLanguageRecorder < Formula
     venv = prefix/".venv"
     system "uv", "venv", "--python", "3.12", venv.to_s
     system "uv", "pip", "install", "--python", venv/"bin/python",
-           "-r", prefix/"app/requirement.txt", "--quiet"
+           "-r", prefix/"app/requirement.txt"
 
-    # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks
-    qt_web_core = venv/"lib/python3.12/site-packages/PySide6/Qt/lib/QtWebEngineCore.framework"
-    if qt_web_core.exist?
-      system "codesign", "--force", "--deep", "--sign", "-", qt_web_core.to_s
+    # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks.
+    # Must sign inner bundles first (bottom-up), then the outer framework.
+    pyside6_dir = venv/"lib/python3.12/site-packages/PySide6"
+    if pyside6_dir.exist?
+      # 1. Sign all nested .app bundles inside frameworks first
+      Dir.glob(pyside6_dir/"Qt/lib/**/*.app").each do |app_bundle|
+        system "codesign", "--force", "--sign", "-", app_bundle
+      end
+      # 2. Sign all frameworks (now their subcomponents are already signed)
+      Dir.glob(pyside6_dir/"Qt/lib/*.framework").each do |framework|
+        system "codesign", "--force", "--sign", "-", framework
+      end
+      # 3. Sign any remaining Mach-O binaries/dylibs
+      Dir.glob(pyside6_dir/"**/*.{dylib,so}").each do |lib|
+        system "codesign", "--force", "--sign", "-", lib rescue nil
+      end
     end
 
     # Create CLI launcher
