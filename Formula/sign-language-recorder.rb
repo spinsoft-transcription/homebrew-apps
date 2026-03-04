@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.8/sign-language-recorder-0.1.8.tar.gz"
-  sha256 "71a17cb4f3664c55c1a92172045fdfc8f265c5749c2c55cb27da3479b899364c"
-  version "0.1.8"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.9/sign-language-recorder-0.1.9.tar.gz"
+  sha256 "93669d99585640e08cf448d910551de363694090b899fc134b0dde52251698fa"
+  version "0.1.9"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -169,20 +169,13 @@ class SignLanguageRecorder < Formula
       # Auto-setup .app bundle on first run (silent)
       setup_app_bundle 2>/dev/null
 
-      # App must run from app/ directory (all relative paths assume this)
-      cd "$INSTALL_DIR/app" || exit 1
-      exec "$VENV_PYTHON" app.py "$@"
-    EOS
+      # Settings and DB live in var/ so they persist across brew upgrades
+      PERSISTENT_DIR="#{var}/sign-language-recorder"
+      mkdir -p "$PERSISTENT_DIR"
 
-    # Create default settings (writes to prefix, allowed in install)
-    create_default_settings
-  end
-
-  def create_default_settings
-    settings_file = prefix/"app/settings.yaml"
-    return if settings_file.exist?
-
-    settings_file.write <<~YAML
+      # Create default settings only on first install
+      if [[ ! -f "$PERSISTENT_DIR/settings.yaml" ]]; then
+          cat > "$PERSISTENT_DIR/settings.yaml" << 'SETTINGS'
       camera_id: 0
       controller_vdo_height: 500
       controller_vdo_width: 500
@@ -203,7 +196,31 @@ class SignLanguageRecorder < Formula
       queue_web_url: ""
       queue_web_api_key: ""
       queue_web_data_dir: data
-    YAML
+      SETTINGS
+      fi
+
+      # Symlink persistent settings + DB into app dir (app reads from CWD)
+      ln -sf "$PERSISTENT_DIR/settings.yaml" "$INSTALL_DIR/app/settings.yaml"
+
+      # DB: if it exists in app dir but not in persistent dir (first migration), move it
+      if [[ -f "$INSTALL_DIR/app/sign_language.db" && ! -L "$INSTALL_DIR/app/sign_language.db" ]]; then
+          mv "$INSTALL_DIR/app/sign_language.db" "$PERSISTENT_DIR/sign_language.db"
+      fi
+      # Always symlink so the app creates/reads DB in persistent location
+      ln -sf "$PERSISTENT_DIR/sign_language.db" "$INSTALL_DIR/app/sign_language.db"
+
+      # Symlink persistent data/ and output/ directories
+      for dir in data output; do
+          mkdir -p "$PERSISTENT_DIR/$dir"
+          # Remove placeholder dir from install if present, then symlink
+          [[ -d "$INSTALL_DIR/app/$dir" && ! -L "$INSTALL_DIR/app/$dir" ]] && rm -rf "$INSTALL_DIR/app/$dir"
+          ln -sf "$PERSISTENT_DIR/$dir" "$INSTALL_DIR/app/$dir"
+      done
+
+      # App must run from app/ directory (all relative paths assume this)
+      cd "$INSTALL_DIR/app" || exit 1
+      exec "$VENV_PYTHON" app.py "$@"
+    EOS
   end
 
   def caveats
