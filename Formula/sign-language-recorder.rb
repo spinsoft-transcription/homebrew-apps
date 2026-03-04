@@ -27,14 +27,14 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.0/sign-language-recorder-0.1.0.tar.gz"
-  sha256 "0fa010327a2af709c3cc24665a0aed12aa641c6989d9c0ebad98ffadab74623a"
-  version "0.1.0"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.2/sign-language-recorder-0.1.2.tar.gz"
+  sha256 "24a35d686762991ff73af13499a49bafe6f23adb7f43f9d0a0ae36f38ed70110"
+  version "0.1.2"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
 
-  depends_on "python@3.11"
+  depends_on "uv"
   depends_on "ffmpeg"
   depends_on :macos
 
@@ -42,13 +42,11 @@ class SignLanguageRecorder < Formula
     # Install app + scripts from the tarball (no data/output/venv)
     prefix.install Dir["app", "scripts"]
 
-    # Create virtual environment with Homebrew's Python
+    # Create virtual environment and install dependencies with uv (much faster than pip)
     venv = prefix/".venv"
-    system Formula["python@3.11"].opt_bin/"python3.11", "-m", "venv", venv.to_s
-
-    # Install Python dependencies
-    system venv/"bin/python", "-m", "pip", "install", "--upgrade", "pip", "--quiet"
-    system venv/"bin/python", "-m", "pip", "install", "-r", prefix/"app/requirement.txt", "--quiet"
+    system "uv", "venv", "--python", "3.12", venv.to_s
+    system "uv", "pip", "install", "--python", venv/"bin/python",
+           "-r", prefix/"app/requirement.txt", "--quiet"
 
     # Create CLI launcher
     (bin/"sign-language-recorder").write <<~EOS
