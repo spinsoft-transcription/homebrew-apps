@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.2/sign-language-recorder-0.1.2.tar.gz"
-  sha256 "24a35d686762991ff73af13499a49bafe6f23adb7f43f9d0a0ae36f38ed70110"
-  version "0.1.2"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.3/sign-language-recorder-0.1.3.tar.gz"
+  sha256 "0ce9912f5f8430b7f3a8130d2d8a6aa026bb3db41262fa60c98278496dc6c07b"
+  version "0.1.3"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -37,6 +37,9 @@ class SignLanguageRecorder < Formula
   depends_on "uv"
   depends_on "ffmpeg"
   depends_on :macos
+
+  # Prevent Homebrew from ad-hoc signing PySide6/Qt binaries (they have nested bundles)
+  skip_clean ".venv"
 
   def install
     # Install app + scripts from the tarball (no data/output/venv)
@@ -47,6 +50,12 @@ class SignLanguageRecorder < Formula
     system "uv", "venv", "--python", "3.12", venv.to_s
     system "uv", "pip", "install", "--python", venv/"bin/python",
            "-r", prefix/"app/requirement.txt", "--quiet"
+
+    # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks
+    qt_web_core = venv/"lib/python3.12/site-packages/PySide6/Qt/lib/QtWebEngineCore.framework"
+    if qt_web_core.exist?
+      system "codesign", "--force", "--deep", "--sign", "-", qt_web_core.to_s
+    end
 
     # Create CLI launcher
     (bin/"sign-language-recorder").write <<~EOS
