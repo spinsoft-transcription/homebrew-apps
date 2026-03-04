@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.6/sign-language-recorder-0.1.6.tar.gz"
-  sha256 "1f31243bdcab96a655795d523807bcfb581679b25dcb570d65a7946630e82188"
-  version "0.1.6"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.7/sign-language-recorder-0.1.7.tar.gz"
+  sha256 "b0191dccabba7dd26b36d5e986f882d3af2efdff960cbe215c19167cb4444115"
+  version "0.1.7"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -93,10 +93,12 @@ class SignLanguageRecorder < Formula
       cd "$INSTALL_DIR/app" || exit 1
       exec "$VENV_PYTHON" app.py "$@"
     EOS
+
+    # Create .app bundle during install (post_install runs sandboxed and can't write to /Applications)
+    create_app_bundle
   end
 
   def post_install
-    create_app_bundle
     create_default_settings
   end
 
