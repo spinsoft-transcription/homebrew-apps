@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.5/sign-language-recorder-0.1.5.tar.gz"
-  sha256 "11ce2759e701ba0abd0fcce23fda7061bb11efecfed34d2625166c9c780cd86f"
-  version "0.1.5"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.6/sign-language-recorder-0.1.6.tar.gz"
+  sha256 "1f31243bdcab96a655795d523807bcfb581679b25dcb570d65a7946630e82188"
+  version "0.1.6"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -46,29 +46,33 @@ class SignLanguageRecorder < Formula
     # Install app + scripts from the tarball (no data/output/venv)
     prefix.install Dir["app", "scripts"]
 
-    # Create virtual environment using Homebrew's stable Python (not uv's temp download)
-    venv = prefix/".venv"
-    python = Formula["python@3.12"].opt_bin/"python3.12"
-    system "uv", "venv", "--python", python.to_s, "--relocatable", venv.to_s
-    system "uv", "pip", "install", "--python", venv/"bin/python",
-           "-r", prefix/"app/requirement.txt"
+    # venv lives in var/ so it persists across brew upgrades (avoids re-downloading ~2GB)
+    venv_dir = var/"sign-language-recorder/.venv"
 
-    # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks.
-    # Must sign inner bundles first (bottom-up), then the outer framework.
-    pyside6_dir = venv/"lib/python3.12/site-packages/PySide6"
-    if pyside6_dir.exist?
-      # 1. Sign all nested .app bundles inside frameworks first
-      Dir.glob(pyside6_dir/"Qt/lib/**/*.app").each do |app_bundle|
-        system "codesign", "--force", "--sign", "-", app_bundle
+    # Only create venv + install deps if it doesn't exist yet (skip on upgrade)
+    unless (venv_dir/"bin/python").exist?
+      venv_dir.mkpath
+      python = Formula["python@3.12"].opt_bin/"python3.12"
+      system "uv", "venv", "--python", python.to_s, "--relocatable", venv_dir.to_s
+      system "uv", "pip", "install", "--python", venv_dir/"bin/python",
+             "-r", prefix/"app/requirement.txt"
+
+      # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks.
+      # Must sign inner bundles first (bottom-up), then the outer framework.
+      pyside6_dir = venv_dir/"lib/python3.12/site-packages/PySide6"
+      if pyside6_dir.exist?
+        Dir.glob(pyside6_dir/"Qt/lib/**/*.app").each do |app_bundle|
+          system "codesign", "--force", "--sign", "-", app_bundle
+        end
+        Dir.glob(pyside6_dir/"Qt/lib/*.framework").each do |framework|
+          system "codesign", "--force", "--sign", "-", framework
+        end
+        Dir.glob(pyside6_dir/"**/*.{dylib,so}").each do |lib|
+          system "codesign", "--force", "--sign", "-", lib rescue nil
+        end
       end
-      # 2. Sign all frameworks (now their subcomponents are already signed)
-      Dir.glob(pyside6_dir/"Qt/lib/*.framework").each do |framework|
-        system "codesign", "--force", "--sign", "-", framework
-      end
-      # 3. Sign any remaining Mach-O binaries/dylibs
-      Dir.glob(pyside6_dir/"**/*.{dylib,so}").each do |lib|
-        system "codesign", "--force", "--sign", "-", lib rescue nil
-      end
+    else
+      ohai "Reusing existing venv at #{venv_dir}"
     end
 
     # Create CLI launcher
@@ -78,7 +82,7 @@ class SignLanguageRecorder < Formula
       export LANG="en_US.UTF-8"
 
       INSTALL_DIR="#{prefix}"
-      VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
+      VENV_PYTHON="#{var}/sign-language-recorder/.venv/bin/python"
 
       if [[ "$1" == "--update" ]]; then
           brew upgrade sign-language-recorder 2>/dev/null || brew upgrade spinsoft-transcription/apps/sign-language-recorder
@@ -152,7 +156,7 @@ class SignLanguageRecorder < Formula
       export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
       export LANG="en_US.UTF-8"
       cd "#{prefix}/app" || exit 1
-      exec "#{prefix}/.venv/bin/python" app.py "$@"
+      exec "#{var}/sign-language-recorder/.venv/bin/python" app.py "$@"
     EOS
     (app_bundle/"Contents/MacOS/launcher").chmod 0755
   end
