@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.10/sign-language-recorder-0.1.10.tar.gz"
-  sha256 "0d551a8b865a62d16ec2e705153447c7a72048009d0159a4d74d814b903a3917"
-  version "0.1.10"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.11/sign-language-recorder-0.1.11.tar.gz"
+  sha256 "9b16c8e546692f32a772ed992b93e576c9e284dce5dc076d5c352f30caf02482"
+  version "0.1.11"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
@@ -38,6 +38,7 @@ class SignLanguageRecorder < Formula
   depends_on "uv"
   depends_on "ffmpeg"
   depends_on :macos
+  depends_on arch: :arm64   # Prevent installation under Rosetta / x86_64 Homebrew on Apple Silicon
 
   # Prevent Homebrew from ad-hoc signing PySide6/Qt binaries (they have nested bundles)
   skip_clean ".venv"
@@ -55,6 +56,7 @@ class SignLanguageRecorder < Formula
       python = Formula["python@3.12"].opt_bin/"python3.12"
       system "uv", "venv", "--python", python.to_s, "--relocatable", venv_dir.to_s
       system "uv", "pip", "install", "--python", venv_dir/"bin/python",
+             "--python-platform", "macos-aarch64",
              "-r", prefix/"app/requirement.txt"
 
       # Fix PySide6 codesigning — Homebrew's ad-hoc signing chokes on nested Qt frameworks.
@@ -136,6 +138,10 @@ class SignLanguageRecorder < Formula
           <string>This app may use the microphone for audio recording.</string>
           <key>NSHighResolutionCapable</key>
           <true/>
+          <key>LSArchitecturePriority</key>
+          <array>
+              <string>arm64</string>
+          </array>
       </dict>
       </plist>
       PLIST
