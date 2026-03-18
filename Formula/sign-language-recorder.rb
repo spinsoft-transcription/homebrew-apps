@@ -27,9 +27,9 @@ class SignLanguageRecorder < Formula
   homepage "https://github.com/spinsoft-transcription/sign-language-recorder-app"
 
   # ── UPDATE THESE when you release a new version ─────────────
-  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.14/sign-language-recorder-0.1.14.tar.gz"
-  sha256 "6fb021d2100f54645df728dc2fd3331febbf287813acbe420ca78513095e98a3"
-  version "0.1.14"
+  url "https://github.com/spinsoft-transcription/homebrew-apps/releases/download/v0.1.15/sign-language-recorder-0.1.15.tar.gz"
+  sha256 "bcfc9923fbf8c7c1557e1f049f49ded286ca9c04acdfbfe99afe3538faf04539"
+  version "0.1.15"
   # ────────────────────────────────────────────────────────────
 
   license "MIT"
